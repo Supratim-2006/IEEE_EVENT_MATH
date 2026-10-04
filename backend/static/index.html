@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="en"><head><meta http-equiv="Cache-Control" content="no-store"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI Calculator Arena</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#070b14;--panel:rgba(255,255,255,.045);--line:rgba(255,255,255,.1);--tx:#e6ecfa;--mut:#8592b0;--acc:#6ee7d8;--ok:#5be28a;--bad:#ff6b7a;--warn:#ffc15e}
+*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(1100px 600px at 80% -10%,#142446 0,transparent 60%),var(--bg);color:var(--tx);font:16px/1.4 'Space Grotesk',system-ui,sans-serif}
+.mono{font-family:'JetBrains Mono',monospace}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.glass{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;backdrop-filter:blur(10px)}
+.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{flex:1 1 0;min-width:0}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+h1{font-size:18px;margin:0}.mut{color:var(--mut)}
+input,button,textarea{font:inherit;color:inherit}
+input,textarea{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.3);margin:6px 0}
+button{padding:12px 18px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
+button:hover{border-color:var(--acc)}button:focus-visible,input:focus-visible{outline:2px solid var(--acc)}
+button.go{background:var(--acc);color:#04120f;font-weight:700;border:0}button:disabled{opacity:.35;cursor:not-allowed}
+#eq{font:700 clamp(30px,7vw,64px)/1.1 'JetBrains Mono',monospace;text-align:center;margin:8px 0}
+#timer{font:700 clamp(48px,12vw,96px)/1 'JetBrains Mono',monospace;text-align:center}
+#timer.low{color:var(--bad)}
+.slot{text-align:center;transition:border-color .2s}.slot.ready{border-color:var(--ok)}.slot.me{box-shadow:0 0 0 1px var(--acc)}
+.slot b{display:block;font:700 44px 'JetBrains Mono',monospace}
+.letter{font:700 18px 'JetBrains Mono',monospace;color:var(--acc)}
+.banner{text-align:center;padding:10px;border-radius:10px;margin:10px 0}
+.banner.ok{background:rgba(91,226,138,.12);color:var(--ok)}.banner.bad{background:rgba(255,107,122,.12);color:var(--bad)}
+.cam{position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3}
+.cam video,.cam canvas{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}.cam canvas{position:absolute;inset:0;pointer-events:none}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;margin-top:8px}.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .1s}
+table{width:100%;border-collapse:collapse}td,th{padding:8px;text-align:left;border-bottom:1px solid var(--line)}
+.hide{display:none!important}
+.tabs{display:flex;gap:8px;margin:10px 0}.tabs button{flex:1;padding:10px}.tabs button.sel{border-color:var(--acc);background:rgba(110,231,216,.15)}
+label{display:block;margin-top:4px;font-size:14px;color:var(--mut)}
+.pause{background:rgba(255,193,94,.14);border:1px solid var(--warn);color:var(--warn);border-radius:12px;padding:12px;text-align:center;font-weight:700;margin-bottom:12px}
+.codechip{display:inline-block;font:700 22px 'JetBrains Mono',monospace;letter-spacing:.15em;padding:6px 14px;border:1px dashed var(--acc);border-radius:10px;color:var(--acc);margin:6px 0}
+#timer.paused{color:var(--warn)}
+.hero{text-align:center;padding:32px 16px;margin-bottom:12px}.hero h2{font-size:clamp(24px,5vw,38px);margin:0 0 6px}
+button.big{font-size:clamp(22px,5vw,32px);padding:16px 48px;border-radius:999px;margin-top:14px;letter-spacing:.08em;box-shadow:0 0 30px rgba(110,231,216,.35)}
+.rolebtns{display:flex;gap:10px;justify-content:center;margin-top:10px}.rolebtns button{flex:0 0 auto;min-width:96px}.rolebtns button.sel{border-color:var(--acc);background:rgba(110,231,216,.15)}
+.toast{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:50;padding:10px 22px;border-radius:999px;font-weight:700;pointer-events:none;animation:pop 2.4s ease forwards;max-width:90vw;text-align:center}
+.toast.ok{background:#12351f;color:var(--ok);border:1px solid var(--ok)}.toast.bad{background:#3a1820;color:var(--bad);border:1px solid var(--bad)}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,-12px)}10%,80%{opacity:1;transform:translate(-50%,0)}100%{opacity:0}}
+details.help{font-size:13px;margin-top:6px}details.help summary{cursor:pointer;color:var(--acc)}
+/* laptop / desktop: camera pinned to the top-right corner. Phones keep the original in-flow layout. */
+@media(min-width:900px){
+  body.ingame .wrap{max-width:1300px;padding-right:312px}
+  body.ingame #camPanel{position:fixed;top:16px;right:16px;width:280px;z-index:30;padding:10px;background:rgba(10,16,30,.92)}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation-duration:.01s!important}}
+
+/* ---- roles, auth, logout, admin console ---- */
+.center{min-height:88vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:6px}
+.brand{font-size:clamp(28px,6vw,40px);margin:8px 0 0}.tag{color:var(--acc);margin:0 0 22px}
+.roles{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:12px}
+.rcard{width:210px;padding:22px 16px;border-radius:16px;background:linear-gradient(180deg,rgba(110,120,255,.08),rgba(255,255,255,.03));transition:transform .15s,border-color .15s}
+.rcard:hover,.rcard:focus-visible{transform:translateY(-3px);border-color:#7c6cff;box-shadow:0 0 0 1px #7c6cff,0 12px 30px rgba(80,70,255,.25)}
+.rcard .ri{display:grid;place-items:center;width:52px;height:52px;margin:0 auto 10px;border-radius:50%;background:rgba(124,108,255,.18);font-size:24px}
+.rcard b{display:block;font-size:18px}.rcard small{display:block;color:var(--mut);margin-top:6px;line-height:1.35}
+.auth{width:100%;max-width:400px;margin:7vh auto 0;padding:26px 22px;text-align:center;border-radius:18px}.auth h2{margin:10px 0 2px}
+.fld{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:rgba(0,0,0,.3);border-radius:12px;padding:0 10px;margin:10px 0;color:var(--mut)}
+.fld input{border:0;background:none;margin:0;flex:1;padding:13px 4px}.fld:focus-within{border-color:var(--acc);box-shadow:0 0 0 3px rgba(110,231,216,.15)}
+.fld input:focus-visible{outline:none}.eye{border:0;background:none;padding:6px;color:var(--mut)}
+button.go.wide{width:100%;padding:13px;margin-top:6px;background-image:linear-gradient(90deg,#6c5cff,#3aa0ff);color:#fff}
+.rm{display:flex;gap:8px;align-items:center;justify-content:flex-start;margin:12px 0 0;color:var(--mut);font-size:14px}.rm input{width:auto;margin:0}
+.err{color:var(--bad);min-height:20px;margin:8px 0 0;font-size:14px}.small{font-size:13px}
+.back{display:block;border:0;background:none;color:var(--mut);padding:0 0 8px;text-align:left}.ghost{background:none}.danger{border-color:var(--bad);color:var(--bad)}
+.top{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}.top .sp{flex:1}
+.pill{display:inline-flex;gap:6px;align-items:center;font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:999px}.pill i{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.hero2{padding:26px;border-radius:16px;background:linear-gradient(120deg,rgba(80,70,255,.25),rgba(58,160,255,.08));margin-bottom:14px}
+.kpis{display:flex;gap:10px;flex-wrap:wrap}.kpi{flex:1 1 110px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+.kpi b{display:block;font:700 24px 'JetBrains Mono',monospace}.kpi small{color:var(--mut)}
+.tab2{display:flex;gap:6px;border-bottom:1px solid var(--line);margin-bottom:14px}.tab2 button{border:0;border-radius:10px 10px 0 0;background:none}.tab2 button.sel{color:var(--acc);box-shadow:inset 0 -2px var(--acc)}
+.toolbar{display:flex;gap:12px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:12px}.toolbar .acts{display:flex;gap:8px;flex-wrap:wrap}
+.podium{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:12px}.ranks{display:grid;gap:10px}
+.rk{display:grid;grid-template-columns:auto 1fr auto;gap:6px 14px;align-items:center;padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
+.rk .rb{font:700 22px 'JetBrains Mono',monospace;min-width:46px;height:46px;display:grid;place-items:center;border-radius:12px;background:rgba(255,255,255,.06)}
+.podium .rb{font-size:28px}.rk b{font-size:17px}.rk small{display:block;color:var(--mut)}.rk .rs{text-align:right}.rk .rs b{font:700 24px 'JetBrains Mono',monospace}
+.rk .chips{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--mut)}.rk .chips span{padding:3px 9px;border:1px solid var(--line);border-radius:999px}
+.r1{border-color:#f5c451;background:linear-gradient(160deg,rgba(245,196,81,.16),rgba(255,255,255,.03))}.r1 .rs b{color:#f5c451}
+.r2{border-color:#b8c4d6;background:linear-gradient(160deg,rgba(184,196,214,.14),rgba(255,255,255,.03))}
+.r3{border-color:#e08a4f;background:linear-gradient(160deg,rgba(224,138,79,.15),rgba(255,255,255,.03))}
+.modal{position:fixed;inset:0;background:rgba(3,6,14,.7);backdrop-filter:blur(6px);display:grid;place-items:center;z-index:60}
+.mbox{position:relative;width:min(92vw,400px);background:#0e1426;border:1px solid var(--line);border-radius:18px;padding:28px 22px;text-align:center}
+.mbox .x{position:absolute;right:10px;top:10px;border:0;background:none}.mico{width:56px;height:56px;border-radius:16px;margin:0 auto 12px;display:grid;place-items:center;font-size:26px;background:linear-gradient(135deg,#6c5cff,#3aa0ff)}
+.mbtns{display:flex;gap:10px;margin-top:16px}.mbtns button{flex:1;border-radius:999px}.mbtns .go{background-image:linear-gradient(90deg,#6c5cff,#3aa0ff);color:#fff}
+</style></head><body><div class="wrap">
+
+<!-- WELCOME: role selection -->
+<section id="welcome" class="center"><div data-logo></div><h1 class="brand">AI Calculator Arena</h1><p class="tag">Think. Build. Compete.</p>
+  <p>Choose your role to continue</p>
+  <div class="roles">
+    <button class="rcard" data-go="login"><span class="ri">👥</span><b>Participant</b><small>Play the game and compete with teams</small></button>
+    <button class="rcard" data-go="audLogin"><span class="ri">👤</span><b>Audience</b><small>Watch, enjoy and stay updated</small></button>
+    <button class="rcard" data-go="adminLogin"><span class="ri">🛡</span><b>Admin</b><small>Manage teams, scores and event settings</small></button>
+  </div></section>
+<section id="audLogin" class="hide"></section>
+<section id="adminLogin" class="hide"></section>
+<section id="audHome" class="hide">
+  <div class="top"><span data-logo></span><b>AI Calculator Arena</b><span class="sp"></span><span class="pill"><i></i>Live Event</span><span class="mut small" id="audUser"></span><button id="audOut" class="ghost">Log out</button></div>
+  <div class="hero2"><h2 style="margin:0 0 6px">Welcome to the Arena!</h2><p class="mut" style="margin:0">Teams are competing live right now. Sit back and enjoy the event.</p></div>
+  <div class="kpis"><div class="kpi"><b id="aTeams">–</b><small>Total teams</small></div><div class="kpi"><b id="aPlayers">–</b><small>Participants</small></div><div class="kpi"><b id="aPlaying">–</b><small>Playing now</small></div><div class="kpi"><b id="aDone">–</b><small>Finished</small></div><div class="kpi"><b id="aQ">–</b><small>Questions per team</small></div></div>
+</section>
+<section id="loggedOut" class="center hide"><div data-logo></div><h1 class="brand" style="font-size:30px">You've been logged out</h1><p class="mut">Thank you for being a part of AI Calculator Arena!</p>
+  <button class="go wide" id="backLogin" style="max-width:260px">Back to Login</button></section>
+
+<!-- LOGIN -->
+<section id="login" class="glass hide" style="max-width:440px;margin:6vh auto 0">
+  <button class="back" data-go="welcome">← Back</button>
+  <h1>AI Calculator Arena</h1><p class="mut">Three players, three cameras, one equation.</p>
+  <div class="tabs"><button id="tabNew" class="sel">Create team (leader)</button><button id="tabJoin">Join / log in</button></div>
+  <label id="tnWrap">Team name<input id="teamIn" maxlength="30" autocomplete="off"></label>
+  <label id="codeWrap" class="hide">Team ID (from your leader)<input id="code" autocapitalize="characters" maxlength="8" autocomplete="off"></label>
+  <label>Your name<input id="pname" maxlength="20" autocomplete="off"></label>
+  <label>Roll number<input id="roll" maxlength="30" autocomplete="off"></label>
+  <label>Phone number <span class="mut small">(optional · India, 10 digits)</span><input id="phone" type="tel" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" autocomplete="tel-national"></label>
+  <button class="go" id="joinBtn" style="width:100%;margin-top:8px">Create team</button>
+  <p id="err" class="mut"></p>
+  <p class="mut" style="font-size:13px">The leader creates the team and gets a Team ID to share. Teammates join with that ID. Only the leader can start the game, and only when all 3 players are online.</p>
+</section>
+
+<!-- GAME -->
+<section id="game" class="hide">
+  <header><div><h1 id="tname"></h1><span class="mut" id="phaseTxt"></span> <span class="mono mut" id="tcode"></span></div><div style="text-align:right"><div class="mono" style="font-size:22px">Score <span id="score">0</span></div><button id="logoutBtn" style="padding:4px 12px;font-size:13px;margin-top:4px">Log out</button></div></header>
+  <div id="pauseBar" class="pause hide"></div>
+  <!-- START SCREEN: shown until the leader presses START -->
+  <div id="startCard" class="glass hero hide">
+    <h2 id="startTitle">Ready to play?</h2>
+    <p class="mut" id="startSub"></p>
+    <div id="roleBox" class="hide"><p><b>Choose your variable</b> <span class="mut">(picking a taken letter swaps with that teammate; roles lock for the whole game)</span></p>
+      <div class="rolebtns"><button data-r="X">I am X</button><button data-r="Y">I am Y</button><button data-r="Z">I am Z</button></div></div>
+    <button class="go big hide" id="startBtn">▶ START</button>
+  </div>
+  <div id="arena" class="hide">
+    <div class="glass">
+      <div class="mut" id="meta" style="text-align:center"></div>
+      <div id="eq">…</div>
+      <div id="timer">–</div>
+    </div>
+    <div class="row" id="slots" style="margin:12px 0"></div>
+  </div>
+  <div id="endCard" class="glass hero hide"><h2>🏁 Game over</h2><p class="mut" id="endSub"></p><div class="kpis" id="endKpis"></div></div>
+  <div class="row">
+    <div class="glass" id="leftPanel">
+      <div id="play" class="hide"><p id="readout" class="mono" style="font-size:20px"></p>
+        <p id="lockHint" class="mut" style="margin:0"></p></div>
+      <table id="log" class="mono" style="margin-top:10px"></table>
+    </div>
+    <div class="glass" id="camPanel"><div class="cam"><video id="cam" playsinline muted></video><canvas id="ov"></canvas></div>
+      <div class="row" style="margin-top:8px"><div>Detected <b class="mono" id="det" style="font-size:28px">–</b></div><div class="mut" id="stab" style="text-align:right">Camera off</div></div>
+      <div class="bar"><i id="bar"></i></div><button id="calBtn" style="width:100%;margin-top:8px">Calibrate my hand (8 s)</button>
+      <details class="help"><summary>How to show digits</summary><p class="mut" style="font-size:13px;margin:6px 0 0"><b>0</b> = fist · <b>1–5</b> = fingers on one hand · <b>6–9</b> = open hand (5) plus 1–4 fingers on the other hand. Palms toward the camera, both hands fully in view. Video stays on this device; only the digit is sent.</p></details></div>
+  </div>
+</section>
+
+<!-- ADMIN -->
+<section id="admin" class="hide">
+  <div class="top"><span data-logo></span><b>Admin console</b><span class="sp"></span><span class="pill"><i></i>Live Event</span><span id="astats" class="mut mono small"></span><button id="aOut" class="ghost">Log out</button></div>
+  <div class="tab2" role="tablist"><button data-tab="lb" class="sel">Leaderboard</button><button data-tab="teams">Teams</button><button data-tab="set">Settings</button></div>
+  <div id="tab-lb">
+    <div class="toolbar"><div class="kpis" id="kpis" style="flex:1"></div><div class="acts"><button id="dlCsv">⬇ CSV</button><button id="dlPdf">⬇ PDF</button><button id="endGame" class="danger">■ End game</button></div></div>
+    <div id="podium" class="podium"></div><div id="rankcards" class="ranks"></div>
+  </div>
+  <div id="tab-teams" class="hide"><div class="glass"><input id="asearch" placeholder="Search by team name, team ID, player name, roll number or phone…" autocomplete="off"><div style="overflow-x:auto"><table id="board"></table></div></div></div>
+  <div id="tab-set" class="hide row">
+    <div class="glass"><b>Game settings</b> (JSON)<textarea id="cfgTxt" rows="12" class="mono"></textarea><button id="saveCfg">Save settings</button></div>
+    <div class="glass"><b>Audience accounts</b><p class="mut small">Audience members sign in with these. They see event numbers only, never the leaderboard.</p>
+      <label class="fld"><span>✉</span><input id="audNewEmail" type="email" placeholder="email"></label><label class="fld"><span>🔒</span><input id="audNewPass" placeholder="password (6+ characters)"></label>
+      <button class="go" id="audAdd">Add audience member</button><p class="err" id="audMsg"></p><table id="audList"></table></div>
+  </div>
+</section>
+<div id="modal" class="modal hide" role="dialog" aria-modal="true" aria-labelledby="mTitle"><div class="mbox"><button class="x" id="mClose" aria-label="Close">✕</button><div class="mico">⎋</div><h2 id="mTitle" style="margin:0 0 8px"></h2><p class="mut" id="mText" style="margin:0"></p>
+  <div class="mbtns"><button id="mCancel">Cancel</button><button class="go" id="mOk">Log Out</button></div></div></div>
+</div>
+
+<script type="module">
+const $ = s => document.querySelector(s), api = (u, o = {}) => fetch(u, o).then(r => r.ok ? (r.status === 204 ? null : r.json()) : r.json().catch(() => ({ error: r.status })).then(e => Promise.reject(e)));
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+let mode = 'new', S = null, ws = null, tok = null, rem0 = 0, t0 = 0, sent = null, running = false;
+
+// ================= PLAYER =================
+// No saved sessions: nothing is kept in the browser, so a refresh, closed tab or logout always returns to the login screen.
+try { localStorage.removeItem('tok'); localStorage.removeItem('adm'); sessionStorage.clear(); } catch { }
+addEventListener('pageshow', e => { if (e.persisted) location.reload(); });   // back/forward cache must not resurrect an old screen
+const logout = () => { tok = null; if (ws) { ws.onclose = null; ws.close(); } location.reload(); };
+function show(id) { document.body.classList.toggle('ingame', id === 'game'); for (const v of ['welcome', 'login', 'game', 'audLogin', 'adminLogin', 'audHome', 'admin', 'loggedOut']) $('#' + v).classList.toggle('hide', v !== id); }
+const setMode = m => { mode = m; $('#tabNew').classList.toggle('sel', m === 'new'); $('#tabJoin').classList.toggle('sel', m === 'join'); $('#tnWrap').classList.toggle('hide', m !== 'new'); $('#codeWrap').classList.toggle('hide', m !== 'join'); $('#joinBtn').textContent = m === 'new' ? 'Create team' : 'Join team'; $('#err').textContent = ''; };
+$('#logoutBtn').onclick = () => ask('Log out?', 'Your team will be paused until you log in again with your Team ID and details.', 'Log Out', logout);
+$('#tabNew').onclick = () => setMode('new'); $('#tabJoin').onclick = () => setMode('join');
+// ---- phone is optional; when given it must be a 10-digit Indian mobile number (starts with 6-9)
+const tenDigits = () => /^[6-9]\d{9}$/.test($('#phone').value.trim());
+$('#phone').oninput = () => { const v = $('#phone'); v.value = v.value.replace(/\D/g, '').slice(0, 10); $('#err').textContent = ''; };
+$('#joinBtn').onclick = async () => {
+  const f = { name: $('#pname').value, roll: $('#roll').value, phone: $('#phone').value };
+  if (!f.name.trim() || !f.roll.trim() || (mode === 'new' ? !$('#teamIn').value.trim() : !$('#code').value.trim())) { $('#err').textContent = 'Please fill in every field'; return; }
+  f.phone = f.phone.trim();
+  if (f.phone && !tenDigits()) { $('#err').textContent = 'Enter a valid 10-digit Indian mobile number, or clear the field to continue without one'; return; }
+  try { const r = await api(mode === 'new' ? '/api/register' : '/api/join', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mode === 'new' ? { ...f, team_name: $('#teamIn').value } : { ...f, code: $('#code').value }) }); tok = r.token; connect(); }
+  catch (e) { $('#err').style.color = 'var(--bad)'; $('#err').textContent = e.error || (e.detail ? 'Please check your details (phone must be a 10-digit Indian mobile number)' : 'Could not join') }
+};
+function connect() {
+  show('game'); ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws?token=' + tok);
+  ws.onmessage = e => { S = JSON.parse(e.data); rem0 = S.remaining; t0 = Date.now(); render(); };
+  ws.onclose = ev => { if (ev.code === 4401) { tok = null; location.reload(); } else setTimeout(connect, 1500); };
+  startCamera();
+}
+const send = m => ws && ws.readyState === 1 && ws.send(JSON.stringify(m));
+document.querySelectorAll('[data-r]').forEach(b => b.onclick = () => send({ type: 'role', role: b.dataset.r }));
+$('#startBtn').onclick = () => send({ type: 'start' });
+
+const LV = ['', 'Easy', 'Medium', 'Hard'];
+let toastN = -1;
+function toast(html, cls) { const t = document.createElement('div'); t.className = 'toast ' + cls; t.innerHTML = html; document.body.appendChild(t); setTimeout(() => t.remove(), 2500); }
+function render() {
+  const s = S, q = s.question, ph = s.phase, mine = s.you.role, lead = s.you.leader, leader = s.players.find(p => p.leader);
+  const off = s.players.filter(p => !p.online).map(p => p.name), allOn = s.players.length === 3 && off.length === 0;
+  $('#tname').textContent = s.team; $('#tcode').textContent = 'Team ID: ' + s.code; $('#score').textContent = s.score;
+  $('#phaseTxt').textContent = { LOBBY: `Waiting for players (${s.players.length}/3)`, ASSIGN: 'Ready to start', COUNTDOWN: 'Get ready', PLAYING: s.paused ? 'Paused' : 'Show your digit', RESULT: '', FINISHED: 'Event finished' }[ph];
+  // pause bar: someone is offline while the game is running, the timer is frozen
+  const pb = $('#pauseBar'); pb.classList.toggle('hide', !s.paused); if (s.paused) pb.textContent = `⏸ Game paused: waiting for ${off.join(', ') || 'a teammate'} to come back online. The timer is stopped.`;
+  // start screen (lobby / assign / countdown)
+  const pre = ['LOBBY', 'ASSIGN', 'COUNTDOWN'].includes(ph);
+  $('#startCard').classList.toggle('hide', !pre); $('#arena').classList.toggle('hide', pre); $('#play').classList.toggle('hide', ph !== 'PLAYING');
+  $('#roleBox').classList.toggle('hide', ph !== 'ASSIGN'); $('#startBtn').classList.toggle('hide', ph !== 'ASSIGN' || !lead); $('#startBtn').disabled = !allOn;
+  document.querySelectorAll('[data-r]').forEach(b => b.classList.toggle('sel', b.dataset.r === mine));
+  $('#startTitle').textContent = ph === 'LOBBY' ? 'Waiting for your team' : ph === 'COUNTDOWN' ? 'Get ready…' : lead ? 'Ready to play?' : 'Waiting for the leader';
+  $('#startSub').innerHTML = ph === 'LOBBY' ? `Share this Team ID with your teammates:<br><span class="codechip">${esc(s.code)}</span><br>${s.players.length}/3 players have joined.`
+    : ph === 'ASSIGN' ? `You are ${mine || '?'}. Allow the camera and pick your letter. ` + (!allOn ? `<b>Waiting for ${esc(off.join(', '))} to come online…</b>` : lead ? 'Everyone is online. Press START when ready.' : `Waiting for the team leader (${esc(leader ? leader.name : '?')}) to press START.`)
+    : `Starting in ${Math.max(0, Math.ceil(rem0 - (Date.now() - t0) / 1000))}…`;
+  $('#eq').textContent = q ? `${q.expression} = ${q.target}` : (ph === 'FINISHED' ? `All done! Final score ${s.score}` : '…');
+  $('#meta').textContent = q ? `Question ${s.n}/${s.total} · ${LV[q.difficulty]} · ${q.time_limit}s${q.constraint ? ' · ' + q.constraint : ''}` : '';
+  $('#slots').innerHTML = ['X', 'Y', 'Z'].map(L => { const p = s.players.find(p => p.role === L), v = s.values[L];
+    return `<div class="glass slot ${v !== undefined ? 'ready' : ''} ${p && p.id === s.you.id ? 'me' : ''}"><span class="letter">${L}</span><b>${v ?? '–'}</b><span>${p ? esc(p.name) : '—'}${p && !p.online ? ' (offline)' : ''}</span></div>`; }).join('');
+  const v = s.values;
+  $('#readout').textContent = `X=${v.X ?? '?'}  Y=${v.Y ?? '?'}  Z=${v.Z ?? '?'}`;
+  $('#lockHint').textContent = s.locking ? 'All three digits detected… checking. Not right? Just change a digit and keep trying until the timer ends.' : 'Each player shows a digit 0–9.';
+  // a short non-blocking toast about the question that just ended; the next question is already running
+  if (s.last && s.n !== toastN) { toastN = s.n; toast(s.last.ok ? `✓ Correct! +${s.last.pts} (speed bonus ${s.last.bonus})` : '⏱ Time up, next question', s.last.ok ? 'ok' : 'bad'); }
+  $('#log').innerHTML = s.log.map(l => `<tr><td>Question ${l.n}</td><td style="text-align:right;color:var(--${l.ok ? 'ok' : 'bad'})">${l.pts >= 0 ? '+' : ''}${l.pts}</td></tr>`).join('') + (s.log.length ? `<tr><th>Total</th><th style="text-align:right">${s.score}</th></tr>` : '');
+  $('#arena').classList.toggle('hide', pre || ph === 'FINISHED'); $('#endCard').classList.toggle('hide', ph !== 'FINISHED'); if (ph === 'FINISHED') renderEnd(s);
+  tickTimer();
+}
+function tickTimer() {
+  if (!S) return; const live = ['COUNTDOWN', 'PLAYING'].includes(S.phase);
+  const left = live ? (S.paused ? S.remaining : Math.max(0, Math.ceil(rem0 - (Date.now() - t0) / 1000))) : null; // display only; the server owns the clock (frozen while paused)
+  if (S.phase === 'COUNTDOWN') $('#startSub').textContent = S.paused ? 'Paused: waiting for everyone to be online…' : `Starting in ${left}…`;
+  $('#timer').textContent = left === null ? '–' : (S.paused ? '⏸ ' + left : S.phase === 'PLAYING' && left === 0 ? 'TIME UP' : left);
+  $('#timer').classList.toggle('low', S.phase === 'PLAYING' && !S.paused && left <= 5); $('#timer').classList.toggle('paused', !!S.paused);
+}
+setInterval(tickTimer, 200);
+
+// ================= COMPUTER VISION (on-device, up to TWO hands, digits 0–9) =================
+// 0 = fist | 1–5 = fingers on one hand | 6–9 = open hand (5) + 1–4 on the other hand. Digit = total extended fingers over both hands.
+const TUNE = { win: 10, need: 8, alpha: 0.6, margin: 0.01, minPalm: 0.05, lostFrames: 25 };
+const D = (a, b) => Math.hypot(a.x - b.x, a.y - b.y), TIPS = [4, 8, 12, 16, 20];
+// thumb: tip→pinkyMCP / thumbMCP→pinkyMCP ; other fingers: tip→wrist / MCP→wrist  (order: thumb, index, middle, ring, pinky)
+const feats = l => [D(l[4], l[17]) / D(l[2], l[17]), D(l[8], l[0]) / D(l[5], l[0]), D(l[12], l[0]) / D(l[9], l[0]), D(l[16], l[0]) / D(l[13], l[0]), D(l[20], l[0]) / D(l[17], l[0])];
+const DEF = { on: [1.05, 1.55, 1.55, 1.55, 1.42], off: [0.88, 1.38, 1.38, 1.38, 1.28] };
+let TH = (() => { try { return JSON.parse(localStorage.cal) || DEF; } catch { return DEF; } })();
+let H = {}, cal = null;   // H: per-hand smoothing + per-finger hysteresis state, keyed by left/right label
+$('#calBtn').onclick = () => { cal = { step: 'fist', t0: performance.now(), fist: [], open: [] }; };
+const med = a => a.slice().sort((x, y) => x - y)[a.length >> 1];
+function calStep(f, now) {   // 2 poses x 3 s with ONE hand: tight fist, then wide-open hand; thresholds are set between the two per finger
+  const el = (now - cal.t0) / 1000, k = cal.step;
+  if (f && el > 1) cal[k].push(f);
+  if (el >= 3) { if (k === 'fist') { cal.step = 'open'; cal.t0 = now; } else return finishCal(); }
+  return k === 'fist' ? 'Calibrating 1/2: make a tight FIST and hold…' : 'Calibrating 2/2: OPEN hand wide, fingers spread, thumb out…';
+}
+function finishCal() {
+  const on = [], off = []; let ok = cal.fist.length > 8 && cal.open.length > 8;
+  for (let i = 0; i < 5 && ok; i++) { const lo = med(cal.fist.map(f => f[i])), hi = med(cal.open.map(f => f[i])); if (hi - lo < 0.25) ok = false; on.push(lo + 0.6 * (hi - lo)); off.push(lo + 0.4 * (hi - lo)); }
+  cal = null; H = {};
+  if (!ok) return 'Calibration failed: keep the whole hand in view and try again';
+  TH = { on, off }; localStorage.cal = JSON.stringify(TH); return 'Calibrated ✓';
+}
+function draw(video, hands) {
+  const cv = $('#ov'), cx = cv.getContext('2d');
+  if (cv.width !== video.videoWidth) { cv.width = video.videoWidth; cv.height = video.videoHeight; }
+  cx.clearRect(0, 0, cv.width, cv.height);
+  hands.forEach(h => h.sm.forEach((p, i) => { const t = TIPS.indexOf(i); cx.beginPath(); cx.fillStyle = t < 0 ? 'rgba(255,255,255,.7)' : (h.up[t] ? '#5be28a' : '#ff6b7a'); cx.arc(p.x * cv.width, p.y * cv.height, t < 0 ? 3 : 8, 0, 6.3); cx.fill(); }));
+}
+async function startCamera() {
+  if (running) return; running = true;
+  try {
+    const video = $('#cam'); video.srcObject = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: { ideal: 960 }, height: { ideal: 720 } } }); await video.play();
+    const { HandLandmarker, FilesetResolver } = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+    const fset = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm');
+    const mk = delegate => HandLandmarker.createFromOptions(fset, { baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task', delegate }, runningMode: 'VIDEO', numHands: 2, minHandDetectionConfidence: 0.6, minHandPresenceConfidence: 0.6, minTrackingConfidence: 0.6 });
+    const lm = await mk('GPU').catch(() => mk('CPU'));
+    const win = [], confs = []; let lost = 0, lastSend = 0, lastT = -1;
+    const loop = () => {
+      if (video.currentTime !== lastT) {
+        lastT = video.currentTime; const now = performance.now(), r = lm.detectForVideo(video, now), A = video.videoWidth / video.videoHeight;
+        let c = null, why = 'No hand', hs = 1, total = 0, ok = r.landmarks.length > 0, calF = null; const seen = new Set(), hands = [];
+        r.landmarks.forEach((raw, k) => {
+          let key = r.handednesses[k][0].categoryName; if (seen.has(key)) key += k; seen.add(key); hs = Math.min(hs, r.handednesses[k][0].score);
+          const h = H[key] || (H[key] = { sm: null, up: [false, false, false, false, false] });
+          h.sm = h.sm ? h.sm.map((p, i) => ({ x: p.x + TUNE.alpha * (raw[i].x - p.x), y: p.y + TUNE.alpha * (raw[i].y - p.y) })) : raw.map(p => ({ x: p.x, y: p.y })); hands.push(h);
+          const px = h.sm.map(p => ({ x: p.x * A, y: p.y }));   // true proportions before measuring distances
+          if (!raw.every(p => p.x > TUNE.margin && p.x < 1 - TUNE.margin && p.y > TUNE.margin && p.y < 1 - TUNE.margin)) { why = 'Move hands fully into view'; ok = false; }
+          else if (D(px[0], px[9]) < TUNE.minPalm) { why = 'Move hand closer'; ok = false; }
+          else { const f = feats(px); if (k === 0) calF = f; h.up = h.up.map((u, i) => f[i] > TH.on[i] ? true : f[i] < TH.off[i] ? false : u); total += h.up.filter(Boolean).length; }   // hysteresis stops flicker
+        });
+        for (const key of Object.keys(H)) if (!seen.has(key)) delete H[key];   // a hand that left the picture forgets its state
+        if (cal) $('#stab').textContent = calStep(calF, now);
+        else if (ok) { if (total <= 9) c = total; else why = 'Too many fingers (max 9)'; }
+        win.push(c); confs.push(c !== null ? hs : 0); if (win.length > TUNE.win) { win.shift(); confs.shift(); }
+        lost = c === null ? lost + 1 : 0;
+        const counts = new Array(10).fill(0); win.forEach(v => v !== null && counts[v]++);
+        const best = counts.indexOf(Math.max(...counts)), stable = !cal && counts[best] >= TUNE.need ? best : null;   // 8 of the last 10 frames
+        const conf = stable !== null ? confs.reduce((a, b) => a + b, 0) / win.length : 0;   // weakest hand score x share of valid frames
+        if (!cal) $('#stab').textContent = stable !== null ? `✓ stable ${stable}` : (c !== null ? 'Hold steady…' : why);
+        $('#det').textContent = stable ?? c ?? '–'; $('#bar').style.width = Math.min(100, counts[best] / TUNE.need * 100) + '%'; draw(video, hands);
+        const mine = S && S.you && S.values ? S.values[S.you.role] : undefined;
+        if (!cal && S && S.phase === 'PLAYING' && !S.paused && S.you.role && now - lastSend > 400) {   // only the digit (or "hands gone") leaves the device
+          if (stable !== null && stable !== mine) { lastSend = now; send({ type: 'digit', digit: stable, conf }); }
+          else if (stable === null && lost >= TUNE.lostFrames && mine !== undefined) { lastSend = now; send({ type: 'digit', digit: null }); }
+        }
+      }
+      requestAnimationFrame(loop);
+    }; loop();
+  } catch (e) { $('#stab').textContent = 'Camera unavailable: allow access (HTTPS or localhost required)'; running = false; }
+}
+
+// ================= END OF GAME =================
+function renderEnd(s) {
+  $('#endSub').textContent = `${s.team} · final score ${s.score}`;
+  $('#endKpis').innerHTML = [['Score', s.score], ['Solved', `${s.solved}/${s.total}`], ['Minutes', s.minutes]].map(([k, v]) => `<div class="kpi"><b>${v}</b><small>${k}</small></div>`).join('');
+}
+
+// ================= ROLES · LOGIN · LOGOUT · AUDIENCE · ADMIN =================
+const LOGO = '<svg viewBox="0 0 48 48" width="56" height="56" fill="none" stroke="#5ad1ff" stroke-width="2" aria-hidden="true"><circle cx="24" cy="24" r="7"/><circle cx="8" cy="12" r="3"/><circle cx="40" cy="12" r="3"/><circle cx="8" cy="36" r="3"/><circle cx="40" cy="36" r="3"/><path d="M11 14l9 7M37 14l-9 7M11 34l9-7M37 34l-9-7"/></svg>';
+let A = null, AT = null, lastRole = 'welcome', pollT = null, last = null, Q = ''; const open = new Set(), AH = () => ({ 'x-admin': A, 'Content-Type': 'application/json' });
+const ses = { get() { try { return JSON.parse(localStorage.ses || 'null'); } catch { return null; } }, set(v) { localStorage.ses = JSON.stringify(v); }, clear() { localStorage.removeItem('ses'); } };
+function nav(v) { clearInterval(pollT); show(v); const f = document.querySelector('#' + v + ' input'); if (f) f.focus(); }
+function ask(title, text, okLabel, fn) {
+  const m = $('#modal'); $('#mTitle').textContent = title; $('#mText').textContent = text; $('#mOk').textContent = okLabel; m.classList.remove('hide'); $('#mCancel').focus();
+  const close = () => { m.classList.add('hide'); document.removeEventListener('keydown', onKey); }, onKey = e => { if (e.key === 'Escape') close(); };
+  document.addEventListener('keydown', onKey); $('#mCancel').onclick = $('#mClose').onclick = close; m.onclick = e => { if (e.target === m) close(); }; $('#mOk').onclick = () => { close(); fn(); };
+}
+function endSession() { ses.clear(); A = AT = null; clearInterval(pollT); show('loggedOut'); $('#backLogin').focus(); }
+const authHTML = (k, title, email) => `<div class="glass auth"><button class="back" data-go="welcome">← Back</button><div data-logo></div><h2>${title}</h2><p class="mut">${email ? 'Enter your details to get started' : 'Authorised organizers only'}</p>
+  ${email ? `<label class="fld"><span>✉</span><input id="${k}Email" type="email" placeholder="Email address" autocomplete="username"></label>` : ''}
+  <label class="fld"><span>🔒</span><input id="${k}Pass" type="password" placeholder="Password" autocomplete="current-password"><button type="button" class="eye" data-eye="${k}Pass" aria-label="Show password">👁</button></label>
+  <button class="go wide" id="${k}Btn">Login</button><label class="rm"><input type="checkbox" id="${k}Rm"> Remember me on this device</label><p class="err" id="${k}Err" role="alert"></p>
+  <p class="mut small" style="margin:0">${email ? 'Not a member? Contact the organizers.' : 'Forgot the password? Ask the event technical lead.'}</p></div>`;
+async function signIn(k) {
+  const btn = $('#' + k + 'Btn'), err = $('#' + k + 'Err'), pw = $('#' + k + 'Pass').value; err.textContent = '';
+  const body = k === 'aud' ? { email: $('#audEmail').value, password: pw } : { pass: pw };
+  if (!pw || (k === 'aud' && !body.email.trim())) { err.textContent = k === 'aud' ? 'Enter your email and password' : 'Enter the admin password'; return; }
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try { const r = await api(k === 'aud' ? '/api/audience/login' : '/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if ($('#' + k + 'Rm').checked) ses.set({ role: k, token: r.token, email: r.email }); $('#' + k + 'Pass').value = ''; k === 'aud' ? startAud(r.token, r.email) : startAdmin(r.token); }
+  catch (e) { err.textContent = e.error === 'bad password' ? 'Wrong password. Please try again.' : (e.error || 'Could not sign in. Check your connection.'); $('#' + k + 'Pass').select(); }
+  finally { btn.disabled = false; btn.textContent = 'Login'; }
+}
+function startAud(token, email) { AT = token; lastRole = 'audLogin'; $('#audUser').textContent = email || ''; nav('audHome'); loadAud(); pollT = setInterval(loadAud, 5000); }
+async function loadAud() { try { const d = await api('/api/audience/home', { headers: { Authorization: 'Bearer ' + AT } });
+  $('#aTeams').textContent = d.teams; $('#aPlayers').textContent = d.players; $('#aPlaying').textContent = d.playing; $('#aDone').textContent = d.finished; $('#aQ').textContent = d.questions; } catch (e) { if (e.error === 'unauthorized') endSession(); } }
+
+function startAdmin(token) { A = token; lastRole = 'adminLogin'; nav('admin'); api('/api/admin/config', { headers: AH() }).then(c => $('#cfgTxt').value = JSON.stringify(c, null, 1)).catch(() => { }); loadAudList(); poll(); pollT = setInterval(poll, 1500); }
+async function poll() { try { last = await api('/api/admin/state', { headers: AH() }); drawAdmin(); } catch (e) { if (e.error === 'unauthorized') endSession(); } }
+const medal = r => ['🥇', '🥈', '🥉'][r - 1] || r;
+function drawAdmin() {
+  if (!last) return; const s = last, q = Q.trim().toLowerCase(), ranked = [...s.teams].sort((a, b) => a.rank - b.rank);
+  $('#astats').textContent = `Teams ${s.total} · Online ${s.online}`;
+  $('#kpis').innerHTML = [['Teams', s.total], ['Online', s.online], ['Playing', s.playing], ['Finished', s.finished]].map(([k, v]) => `<div class="kpi"><b>${v}</b><small>${k}</small></div>`).join('');
+  const card = t => `<div class="rk ${t.rank <= 3 ? 'r' + t.rank : ''}"><div class="rb">${medal(t.rank)}</div><div><b>${esc(t.name)}</b><small>${esc(t.players.map(p => p.name).join(', ')) || 'No players yet'}</small></div><div class="rs"><b>${t.score}</b><small>points</small></div>
+    <div class="chips"><span>✔ ${t.solved}/${s.questions} solved</span><span>⏱ ${t.minutes} min</span><span>${esc(t.phase)}${t.paused ? ' ⏸' : ''}</span></div></div>`;
+  $('#podium').innerHTML = ranked.slice(0, 3).map(card).join(''); $('#rankcards').innerHTML = ranked.slice(3).map(card).join('') || (ranked.length ? '' : '<p class="mut">No teams have registered yet.</p>');
+  const hit = t => !q || [t.name, t.code, ...t.players.flatMap(p => [p.name, p.roll, p.phone])].some(v => String(v || '').toLowerCase().includes(q));
+  $('#board').innerHTML = '<tr><th>Rank</th><th>Team</th><th>Members (name · roll · phone)</th><th>Points</th><th>Solved</th><th>Minutes</th><th>Status</th><th></th></tr>' + (ranked.filter(hit).map(t => `<tr><td>${t.rank}</td><td><details data-id="${esc(t.id)}" ${open.has(t.id) ? 'open' : ''}><summary>${esc(t.name)} <span class="mut mono">${esc(t.code)}</span></summary><div class="mut mono" style="font-size:13px">${t.question ? `${esc(t.question.expression)} = ${t.question.target} · L${t.question.difficulty} · ${t.question.solutions} solutions · seed ${t.question.seed}<br>X=${t.values.X ?? '?'} Y=${t.values.Y ?? '?'} Z=${t.values.Z ?? '?'} · ${t.remaining}s` : 'No question'}</div></details></td><td>${t.players.map(p => `${p.leader ? '★ ' : ''}${esc(p.name)}${p.role ? ' (' + p.role + ')' : ''} · ${esc(p.roll)}${p.phone ? ' · ' + esc(p.phone) : ''} ${p.online ? '●' : '○'}`).join('<br>') || '<span class="mut">no players yet</span>'}</td><td class="mono">${t.score}</td><td class="mono">${t.solved}/${s.questions}</td><td class="mono">${t.minutes}</td><td>${t.phase}${t.paused ? ' ⏸' : ''}</td><td style="white-space:nowrap"><button data-n="${esc(t.id)}">Next question</button> <button data-d="${esc(t.id)}" class="danger">Delete</button></td></tr>`).join('') || '<tr><td colspan="8" class="mut">No teams match</td></tr>');
+  document.querySelectorAll('[data-n]').forEach(b => b.onclick = () => api(`/api/admin/team/${b.dataset.n}/next`, { method: 'POST', headers: AH() }).catch(() => { }));
+  document.querySelectorAll('[data-d]').forEach(b => b.onclick = () => { const t = s.teams.find(x => x.id === b.dataset.d); if (t) ask('Delete team?', `"${t.name}" with all its players and records will be removed. This cannot be undone.`, 'Delete', async () => { try { await api(`/api/admin/team/${t.id}`, { method: 'DELETE', headers: AH() }); open.delete(t.id); poll(); } catch (e) { toast(e.error || 'Delete failed', 'bad'); } }); });
+  document.querySelectorAll('details[data-id]').forEach(d => d.ontoggle = () => d.open ? open.add(d.dataset.id) : open.delete(d.dataset.id));
+}
+async function dl(kind) { try { const r = await fetch('/api/admin/leaderboard.' + kind, { headers: { 'x-admin': A } }); if (!r.ok) throw 0; const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = 'leaderboard.' + kind; a.click(); URL.revokeObjectURL(a.href); toast('Downloaded leaderboard.' + kind, 'ok'); } catch { toast('Download failed', 'bad'); } }
+async function loadAudList() { try { const l = await api('/api/admin/audience', { headers: AH() });
+  $('#audList').innerHTML = l.map(e => `<tr><td>${esc(e)}</td><td style="text-align:right"><button data-ad="${esc(e)}" class="danger">Remove</button></td></tr>`).join('') || '<tr><td class="mut">No audience accounts yet</td></tr>';
+  document.querySelectorAll('[data-ad]').forEach(b => b.onclick = async () => { await api('/api/admin/audience/' + encodeURIComponent(b.dataset.ad), { method: 'DELETE', headers: AH() }); loadAudList(); }); } catch { } }
+
+function route() {
+  document.querySelectorAll('[data-logo]').forEach(e => e.innerHTML = LOGO);
+  $('#audLogin').innerHTML = authHTML('aud', 'Audience Login', true); $('#adminLogin').innerHTML = authHTML('adm', 'Admin Login', false);
+  document.querySelectorAll('[data-logo]').forEach(e => e.innerHTML = LOGO); document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => nav(b.dataset.go));
+  document.querySelectorAll('[data-eye]').forEach(b => b.onclick = () => { const i = $('#' + b.dataset.eye); i.type = i.type === 'password' ? 'text' : 'password'; b.setAttribute('aria-label', i.type === 'password' ? 'Show password' : 'Hide password'); });
+  [['audEmail', 'aud'], ['audPass', 'aud'], ['admPass', 'adm']].forEach(([id, k]) => $('#' + id).onkeydown = e => { if (e.key === 'Enter') signIn(k); });
+  $('#audBtn').onclick = () => signIn('aud'); $('#admBtn').onclick = () => signIn('adm');
+  $('#backLogin').onclick = () => nav(lastRole);
+  $('#audOut').onclick = () => ask('Log out?', 'Are you sure you want to log out from the audience portal?', 'Log Out', endSession);
+  $('#aOut').onclick = () => ask('Log out?', 'Are you sure you want to log out from the admin console?', 'Log Out', endSession);
+  document.querySelectorAll('[data-tab]').forEach(b => b.onclick = () => { document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('sel', x === b)); for (const t of ['lb', 'teams', 'set']) $('#tab-' + t).classList.toggle('hide', t !== b.dataset.tab); });
+  $('#dlCsv').onclick = () => dl('csv'); $('#dlPdf').onclick = () => dl('pdf');
+  $('#endGame').onclick = () => ask('End the game?', 'Every running team stops now.', 'End game', async () => { try { const r = await api('/api/admin/game/end', { method: 'POST', headers: AH() }); toast(`Game ended for ${r.ended} team(s)`, 'ok'); poll(); } catch { toast('Could not end the game', 'bad'); } });
+  $('#asearch').oninput = e => { Q = e.target.value; drawAdmin(); };
+  $('#saveCfg').onclick = () => api('/api/admin/config', { method: 'PUT', headers: AH(), body: $('#cfgTxt').value }).then(() => toast('Settings saved', 'ok')).catch(() => toast('Invalid settings', 'bad'));
+  $('#audAdd').onclick = async () => { $('#audMsg').textContent = ''; try { await api('/api/admin/audience', { method: 'POST', headers: AH(), body: JSON.stringify({ email: $('#audNewEmail').value, password: $('#audNewPass').value }) }); $('#audNewEmail').value = $('#audNewPass').value = ''; loadAudList(); toast('Audience member added', 'ok'); } catch (e) { $('#audMsg').textContent = e.error || 'Enter a valid email and a password of 6+ characters'; } };
+  const sv = ses.get(); if (sv && sv.role === 'aud') return startAud(sv.token, sv.email); if (sv && sv.role === 'adm') return startAdmin(sv.token);
+  nav(location.hash === '#admin' ? 'adminLogin' : location.hash === '#audience' ? 'audLogin' : 'welcome');
+}
+route();
+</script></body></html>
