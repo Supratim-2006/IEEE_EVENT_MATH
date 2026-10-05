@@ -19,3 +19,14 @@ def test_phone_is_optional_and_checked_when_given():
         assert c.post("/api/join", json=dict(code=code, name="Cy", roll="N3")).status_code == 403
         assert c.post("/api/join", json=dict(code=code, name="Cy", roll="N3", phone="9111111111")).status_code == 403
         assert c.post("/api/join", json=dict(code=code, name="Cy", roll="N3", phone="92222 22222")).status_code == 200
+
+def test_admin_can_delete_all_game_data():
+    from app.core import config
+    with TestClient(app) as c:
+        assert c.delete("/api/admin/data").status_code == 401
+        c.post("/api/register", json=dict(team_name="Old1", name="A", roll="W1")); c.post("/api/register", json=dict(team_name="Old2", name="B", roll="W2"))
+        h = {"x-admin": c.post("/api/admin/login", json={"pass": config.ADMIN_PASS}).json()["token"]}
+        assert c.get("/api/admin/state", headers=h).json()["total"] >= 2
+        r = c.delete("/api/admin/data", headers=h); assert r.status_code == 200 and r.json()["deleted_teams"] >= 2
+        assert c.get("/api/admin/state", headers=h).json()["total"] == 0
+        assert c.post("/api/register", json=dict(team_name="Old1", name="A", roll="W1")).status_code == 200      # names and roll numbers are free again

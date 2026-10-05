@@ -155,6 +155,7 @@ button.go.wide{width:100%;padding:13px;margin-top:6px;background-image:linear-gr
 
 <!-- ADMIN -->
 <section id="admin" class="hide">
+  <div id="dbWarn" class="banner bad hide" style="margin:0 0 12px"></div>
   <div class="top"><span data-logo></span><b>Admin console</b><span class="sp"></span><span class="pill"><i></i>Live Event</span><span id="astats" class="mut mono small"></span><button id="aOut" class="ghost">Log out</button></div>
   <div class="tab2" role="tablist"><button data-tab="lb" class="sel">Leaderboard</button><button data-tab="teams">Teams</button><button data-tab="set">Settings</button></div>
   <div id="tab-lb">
@@ -167,6 +168,7 @@ button.go.wide{width:100%;padding:13px;margin-top:6px;background-image:linear-gr
     <div class="glass"><b>Audience accounts</b><p class="mut small">Audience members sign in with these. They see event numbers only, never the leaderboard.</p>
       <label class="fld"><span>✉</span><input id="audNewEmail" type="email" placeholder="email"></label><label class="fld"><span>🔒</span><input id="audNewPass" placeholder="password (6+ characters)"></label>
       <button class="go" id="audAdd">Add audience member</button><p class="err" id="audMsg"></p><table id="audList"></table></div>
+    <div class="glass"><b>Delete previous data</b><p class="mut small">Removes every team, player, score and question from the database so you can start fresh. Audience accounts and game settings are kept. This cannot be undone.</p><button class="danger" id="wipeAll">Delete all game data</button></div>
   </div>
 </section>
 <div id="modal" class="modal hide" role="dialog" aria-modal="true" aria-labelledby="mTitle"><div class="mbox"><button class="x" id="mClose" aria-label="Close">✕</button><div class="mico">⎋</div><h2 id="mTitle" style="margin:0 0 8px"></h2><p class="mut" id="mText" style="margin:0"></p>
@@ -363,6 +365,7 @@ async function poll() { try { last = await api('/api/admin/state', { headers: AH
 const medal = r => ['🥇', '🥈', '🥉'][r - 1] || r;
 function drawAdmin() {
   if (!last) return; const s = last, q = Q.trim().toLowerCase(), ranked = [...s.teams].sort((a, b) => a.rank - b.rank);
+  const dw = $('#dbWarn'); dw.classList.toggle('hide', !(s.db && s.db.ok === false)); if (s.db && s.db.ok === false) dw.innerHTML = '<b>Database not connected: data is NOT being saved.</b> ' + esc(s.db.hint || '') + (s.db.error ? '<br><small>' + esc(s.db.error) + '</small>' : '');
   $('#astats').textContent = `Teams ${s.total} · Online ${s.online}`;
   $('#kpis').innerHTML = [['Teams', s.total], ['Online', s.online], ['Playing', s.playing], ['Finished', s.finished]].map(([k, v]) => `<div class="kpi"><b>${v}</b><small>${k}</small></div>`).join('');
   const card = t => `<div class="rk ${t.rank <= 3 ? 'r' + t.rank : ''}"><div class="rb">${medal(t.rank)}</div><div><b>${esc(t.name)}</b><small>${esc(t.players.map(p => p.name).join(', ')) || 'No players yet'}</small></div><div class="rs"><b>${t.score}</b><small>points</small></div>
@@ -394,6 +397,7 @@ function route() {
   $('#endGame').onclick = () => ask('End the game?', 'Every running team stops now.', 'End game', async () => { try { const r = await api('/api/admin/game/end', { method: 'POST', headers: AH() }); toast(`Game ended for ${r.ended} team(s)`, 'ok'); poll(); } catch { toast('Could not end the game', 'bad'); } });
   $('#asearch').oninput = e => { Q = e.target.value; drawAdmin(); };
   $('#saveCfg').onclick = () => api('/api/admin/config', { method: 'PUT', headers: AH(), body: $('#cfgTxt').value }).then(() => toast('Settings saved', 'ok')).catch(() => toast('Invalid settings', 'bad'));
+  $('#wipeAll').onclick = () => ask('Delete all game data?', 'Every team, player, score and question will be permanently removed from the database and everyone online is disconnected. Audience accounts and settings are kept.', 'Delete everything', async () => { try { const r = await api('/api/admin/data', { method: 'DELETE', headers: AH() }); toast(`Deleted ${r.deleted_teams} team(s) and all their data`, 'ok'); poll(); } catch (e) { toast(e.error || 'Could not delete the data', 'bad'); } });
   $('#audAdd').onclick = async () => { $('#audMsg').textContent = ''; try { await api('/api/admin/audience', { method: 'POST', headers: AH(), body: JSON.stringify({ email: $('#audNewEmail').value, password: $('#audNewPass').value }) }); $('#audNewEmail').value = $('#audNewPass').value = ''; loadAudList(); toast('Audience member added', 'ok'); } catch (e) { $('#audMsg').textContent = e.error || 'Enter a valid email and a password of 6+ characters'; } };
   const sv = ses.get(); if (sv && sv.role === 'aud') return startAud(sv.token, sv.email); if (sv && sv.role === 'adm') return startAdmin(sv.token);
   nav(location.hash === '#admin' ? 'adminLogin' : location.hash === '#audience' ? 'audLogin' : 'welcome');

@@ -1,4 +1,4 @@
-import asyncio, csv, hashlib, io, json, logging, re, secrets, time
+import asyncio, csv, hashlib, io, json, logging, os, re, secrets, time
 from contextlib import asynccontextmanager
 import jwt
 from fastapi import FastAPI, Header, WebSocket, WebSocketDisconnect
@@ -17,7 +17,7 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 @asynccontextmanager
 async def lifespan(_):
     try: await store.init(); await store.load_into(E); AUD.update(await store.audience_all())
-    except Exception: logging.getLogger("arena").exception("DATABASE UNREACHABLE at startup: running in memory, will keep retrying saves")
+    except Exception: logging.getLogger("arena").error("DATABASE UNREACHABLE at startup, running in memory only and retrying: %s | %s", store.health["error"], store.health["hint"])
     tasks = [asyncio.create_task(E.run()), asyncio.create_task(store.flusher(E))]
     yield
     for t in tasks: t.cancel()
@@ -143,6 +143,22 @@ async def delete_team(tid: str, x_admin: str = Header("")):
             try: await p.ws.close(4401)
             except Exception: pass
     await store.delete_team(tid); ev("admin_action", action="delete_team", team_id=tid); return Response(status_code=204)
+@app.delete("/api/admin/data")                                   # wipes all teams, players, scores and questions; audience accounts and settings are kept
+async def wipe_data(x_admin: str = Header("")):
+    if not is_admin(x_admin): return err("unauthorized", 401)
+    n = len(E.teams)
+    for t in list(E.teams.values()):
+        for p in t.players:
+            if p.ws:
+                try: await p.ws.close(4401)
+                except Exception: pass
+    E.teams.clear(); E.dirty.clear(); E.gen.used.clear()
+    try: await store.wipe()
+    except Exception as e: logging.getLogger("arena").error("wipe failed: %s", store._redact(e)); return err("The server memory was cleared, but the database is not connected, so its rows were NOT deleted. Fix DATABASE_URL (see the red notice on this page)", 500)
+    try:
+        if os.path.exists(config.QUESTION_LOG): open(config.QUESTION_LOG, "w").close()      # the question log is part of the old data too
+    except OSError: pass
+    ev("admin_action", action="wipe_data", teams=n); return {"deleted_teams": n}
 @app.get("/api/admin/state")
 async def state(x_admin: str = Header("")):
     if not is_admin(x_admin): return err("unauthorized", 401)
@@ -153,7 +169,7 @@ async def state(x_admin: str = Header("")):
                                    "solutions": len(t.q.solutions), "seed": t.q.seed, "id": t.q.id}} for t in ts]
     return {"total": len(ts), "online": sum(any(p.ws for p in t.players) for t in ts),
             "playing": sum(t.phase in ("ASSIGN", "COUNTDOWN", "PLAYING", "RESULT") for t in ts),
-            "finished": sum(t.phase == "FINISHED" for t in ts), "questions": len(cfg["sequence"]), "teams": sorted(rows, key=lambda r: -r["score"])}
+            "finished": sum(t.phase == "FINISHED" for t in ts), "db": store.health, "questions": len(cfg["sequence"]), "teams": sorted(rows, key=lambda r: -r["score"])}
 
 # ---------- leaderboard (admin only), downloads, end of game ----------
 def hash_pw(pw, salt=None):

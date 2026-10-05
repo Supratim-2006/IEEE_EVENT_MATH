@@ -1,5 +1,5 @@
 """PostgreSQL persistence (SQLite fallback for local dev). Engine state is saved by a background flusher and reloaded on startup."""
-import asyncio, logging, os
+import asyncio, logging, os, re
 from datetime import datetime, timezone
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, delete, inspect, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -41,11 +41,27 @@ class QuestionRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 _ready = False
+health = {"ok": None, "error": "", "hint": ""}      # shown on the admin page so a broken DATABASE_URL is obvious
+
+def _redact(e):   # connection errors can contain the full database URL (with password): never log or show it
+    return re.sub(r"\S*://\S*", "<url hidden>", str(e))[:300]
+def _mark(ok, e=None):
+    health["ok"] = ok
+    if ok: health["error"] = health["hint"] = ""; return
+    health["error"] = _redact(e)
+    raw = str(e)
+    health["hint"] = ("DATABASE_URL looks like two URLs pasted together. Delete the whole value and paste ONE clean URL (postgresql://user:password@host/dbname)." if "://" in raw or url.count("://") > 1
+        else "Check DATABASE_URL: host, user, password and database name must match your Postgres instance.")
 class AudienceRow(Base):
     __tablename__ = "audience"
     email: Mapped[str] = mapped_column(String(80), primary_key=True); pw: Mapped[str] = mapped_column(String(200))
 
 async def init():
+    try: await _init()
+    except Exception as e: _mark(False, e); raise
+    _mark(True)
+
+async def _init():
     global _ready
     async with engine.begin() as c:
         await c.run_sync(Base.metadata.create_all)
@@ -99,12 +115,19 @@ async def flush(E):
         for i in ids:
             if i not in E.teams: continue                                   # deleted meanwhile
             try: await save(E.teams[i])
-            except Exception: log.exception("save failed for %s", i); E.dirty.add(i)
+            except Exception as e: log.error("save failed for %s: %s", i, _redact(e)); _mark(False, e); E.dirty.add(i)
 
 async def delete_team(tid):
     if not _ready: await init()
     async with _lock, Session() as s:
         for M, col in ((QuestionRow, QuestionRow.team_id), (PlayerRow, PlayerRow.team_id), (TeamRow, TeamRow.id)): await s.execute(delete(M).where(col == tid))
+        await s.commit()
+
+async def wipe():
+    """Delete every team, player and question row (audience accounts are kept)."""
+    if not _ready: await init()
+    async with _lock, Session() as s:
+        for M in (QuestionRow, PlayerRow, TeamRow): await s.execute(delete(M))
         await s.commit()
 
 async def flusher(E):

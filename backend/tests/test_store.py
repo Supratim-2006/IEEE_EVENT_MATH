@@ -11,3 +11,17 @@ def test_team_members_and_state_survive_restart():
         await store.save(t); e2 = Engine(); await store.load_into(e2); r = e2.teams["T1"]
         assert [p.name for p in r.players] == ["Alice", "Bob", "Cara"] and r.score == 150 and r.leader == "P1" and r.players[0].roll == "R1" and r.players[2].phone == "9000000003" and r.q.id == t.q.id and r.q.solutions and r.history
     asyncio.run(go())
+
+def test_wipe_removes_everything_from_the_database():
+    async def go():
+        await store.init(); e = Engine(); t = Team("T9", "Old", "ZZZ999"); t.players = [Player("P9", "Zed", "R9", "")]; t.leader = "P9"; t.roles = {"X": "P9"}
+        t.q = e.gen.generate_question("T9", 1, 1, t.history); e.teams["T9"] = t
+        await store.save(t); await store.wipe(); e2 = Engine(); await store.load_into(e2)
+        assert "T9" not in e2.teams
+    asyncio.run(go())
+
+def test_database_errors_are_redacted_and_explained():
+    bad = Exception('database "arena_db_bfscpostgresql://user:SECRET@host/arena_db_bfsc" does not exist')
+    store._mark(False, bad)
+    assert "SECRET" not in store.health["error"] and "two URLs" in store.health["hint"] and store.health["ok"] is False
+    store._mark(True); assert store.health == {"ok": True, "error": "", "hint": ""}

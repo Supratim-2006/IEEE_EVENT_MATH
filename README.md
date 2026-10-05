@@ -20,6 +20,9 @@ Nothing is remembered in the browser: a refresh, closed tab, back button or **Lo
 ## Database records
 `players` table: name, roll_no, phone, is_leader, points (team score), team_id; `teams` table: team name, team code (Team ID), score, state. Databases from older versions are upgraded automatically (new columns are added on startup).
 
+## Starting fresh
+Admin > Settings > **Delete all game data** removes every team, player, score and question (and clears the question log) after a confirmation. Audience accounts and settings are kept. API: `DELETE /api/admin/data` with the admin token.
+
 ## Admin (`/#admin`)
 Live leaderboard with members (name, roll, phone), a **search box** (team name, Team ID, player name, roll number, phone), per-team **Delete** (removes the team, its players and questions from the database and disconnects them), and the settings JSON. Teams are now created by leaders, not by the admin.
 
