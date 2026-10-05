@@ -6,7 +6,14 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 log = logging.getLogger("arena")
-url, args = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///data/arena.db"), {}
+def clean_url(raw):
+    """Repair a DATABASE_URL that was pasted twice or with a 'DATABASE_URL=' / quote prefix: keep the last complete postgres URL."""
+    raw = (raw or "").strip().strip("\"'").strip()
+    hits = list(re.finditer(r"postgres(?:ql)?(?:\+\w+)?://", raw))
+    return raw[hits[-1].start():].strip().strip("\"'") if hits else raw
+_raw_url = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///data/arena.db")
+url, args = clean_url(_raw_url), {}
+if url != _raw_url.strip(): logging.getLogger("arena").warning("DATABASE_URL was malformed (pasted twice or with extra text) and was repaired automatically. Please set it to ONE clean URL in your host's environment settings")
 for pre in ("postgres://", "postgresql://"):
     if url.startswith(pre): url = "postgresql+asyncpg://" + url[len(pre):]
 if "sslmode=" in url: url, args = url.split("?")[0], {"ssl": True}      # asyncpg takes ssl as an argument

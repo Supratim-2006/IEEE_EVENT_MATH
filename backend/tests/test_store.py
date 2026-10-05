@@ -25,3 +25,8 @@ def test_database_errors_are_redacted_and_explained():
     store._mark(False, bad)
     assert "SECRET" not in store.health["error"] and "two URLs" in store.health["hint"] and store.health["ok"] is False
     store._mark(True); assert store.health == {"ok": True, "error": "", "hint": ""}
+
+def test_clean_url_repairs_pasted_values():
+    one = "postgresql://u:p@host/arena_db"
+    assert store.clean_url(one + one) == one and store.clean_url("DATABASE_URL=" + one) == one and store.clean_url(f'"{one}"') == one and store.clean_url(one + "\n" + one) == one
+    assert store.clean_url("sqlite+aiosqlite:///data/arena.db") == "sqlite+aiosqlite:///data/arena.db"
